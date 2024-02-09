@@ -1,0 +1,30 @@
+"""Main entry point for {{ project_name }} (an "AeroMain" file).
+
+This script should be run through Aeromancy runners ("pdm go").
+"""
+import rich_click as click
+from aeromancy import aeromancy_click_options
+from rich.console import Console
+
+from {{python_package_import_name}}.action_builder import ExampleActionBuilder
+
+console = Console()
+
+
+@click.command()
+@aeromancy_click_options
+def aeromain(
+    **aeromancy_options,
+):
+    """CLI application for controlling {{ project_name }}."""
+    # TODO: Include command line options.
+    config = {}
+    console.log("Config parameters from CLI:", config)
+
+    action_builder = ExampleActionBuilder(**config)
+    action_runner = action_builder.to_runner()
+    action_runner.run_actions(**aeromancy_options)
+
+
+if __name__ == "__main__":
+    aeromain()
