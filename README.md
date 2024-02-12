@@ -1,11 +1,22 @@
 # Aeromancy project template
 
-Copier template for Aeromancy-managed projects. This makes it easy to get a new
-Aeromancy project up and running. This template (along with Aeromancy) is fairly
-opinionated makes a lot of decisions for you in terms of workflows.
+[![Docs](https://img.shields.io/badge/Docs-yellow?style=flat&link=https%3A%2F%2Fquant-aq.github.io%2Faeromancy%2F)](https://quant-aq.github.io/aeromancy/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![pdm-managed](https://img.shields.io/badge/pdm-managed-blueviolet)](https://pdm.fming.dev)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![pre-commit enabled](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+![Apache 2.0 licensed](https://img.shields.io/github/license/quant-aq/aeromancy)
+
+This is a [Copier](https://copier.readthedocs.io/en/stable/) template for
+[Aeromancy](https://github.com/quant-aq/aeromancy)-managed projects. If you're
+not familiar with Aeromancy, you'll want to start with its
+[documentation](https://quant-aq.github.io/aeromancy/). This makes it easy to
+get a new Aeromancy project up and running. This template (along with Aeromancy)
+is fairly opinionated makes a lot of decisions for you in terms of workflows.
 
 Template originally based on
-[pdm-project/copier-pdm](https://github.com/pdm-project/copier-pdm).
+[pdm-project/copier-pdm](https://github.com/pdm-project/copier-pdm) with some
+modifications in [dmcc/copier-pdm](https://github.com/dmcc/copier-pdm).
 
 ## Requirements
 
@@ -40,12 +51,8 @@ git init
 pdm install --dev
 ```
 
-4. Check out the `README.md` for more information or launch the doc server to
-   see it in a browser:
-
-```bash
-pdm doc
-```
+4. Check out [Aeromancy](https://quant-aq.github.io/aeromancy/) docs for more
+   information!
 
 ## Template features
 
