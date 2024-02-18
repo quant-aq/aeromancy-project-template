@@ -11,17 +11,31 @@ from {{python_package_import_name}}.action_builder import ExampleActionBuilder
 console = Console()
 
 
+# Define our CLI options.
 @click.command()
+@click.option(
+    "-l",
+    "--learning-rate",
+    metavar="FLOAT",
+    default=1e-3,
+    type=float,
+    help="Learning rate in optimizer.",
+)
+# We also need to include a list of standard Aeromancy options.
 @aeromancy_click_options
+# Make sure to include any new options we created as arguments to aeromain.
 def aeromain(
+    learning_rate: float,
     **aeromancy_options,
 ):
     """CLI application for controlling {{ project_name }}."""
-    # TODO: Include command line options.
-    config = {}
+    config = {"learning_rate": learning_rate}
     console.log("Config parameters from CLI:", config)
 
+    # This builds our Action dependency graph given the configuration passed in.
     action_builder = ExampleActionBuilder(**config)
+    # We create a corresponding runner to execute the dependency graph and kick
+    # it off.
     action_runner = action_builder.to_runner()
     action_runner.run_actions(**aeromancy_options)
 

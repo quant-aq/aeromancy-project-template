@@ -1,81 +1,54 @@
 """Aeromancy `ActionBuilder` for {{ project_name }}."""
 
-from pathlib import Path
-
-from aeromancy import Action, ActionBuilder, S3Object, Tracker
+from aeromancy import Action, ActionBuilder
 from typing_extensions import override
 
-
-class BogusParentAction(Action):
-    """Bogus Aeromancy `Action` for testing.
-
-    Prints a message to let you know it ran and creates an output artifact.
-    """
-
-    job_type = "parent"
-    job_group = "bogus"
-
-    @override
-    def outputs(self) -> list[str]:
-        return ["bogus-parent"]
-
-    @override
-    def run(self, tracker: Tracker) -> None:
-        output_path = Path("/tmp/bogus-output1.txt")  # noqa: S108
-        output_path.write_text("BogusParentAction output!\n")
-
-        [output_name] = self.outputs()
-        tracker.declare_output(
-            name=output_name,
-            local_filenames=[output_path],
-            s3_destination=S3Object("bogus-bucket", "key1/"),
-            artifact_type="bogus-artifact",
-            metadata={"meaning-of-life": 42},
-            strip_prefix=Path("/tmp"),  # noqa: S108
-        )
-        print("Hello world from BogusParentAction.")
+from {{python_package_import_name}}.actions import (
+    ExampleEvaluationAction,
+    ExampleStoreAction,
+    ExampleTrainAction,
+)
 
 
-class BogusChildAction(Action):
-    """Bogus Aeromancy `Action` for testing.
-
-    Prints a message to let you know it ran and reads an input artifact from the
-    parent.
-    """
-
-    job_type = "child"
-    job_group = "bogus"
-
-    @override
-    def outputs(self) -> list[str]:
-        return ["bogus-child"]
-
-    @override
-    def run(self, tracker: Tracker) -> None:
-        [input_artifact], _ = self.get_io()
-        [input_path] = tracker.declare_input(input_artifact)
-
-        print("Hello world from BogusChildAction.")
-        print(
-            "Parent action created artifact with this text: "
-            f"{input_path.read_text()!r}",
-        )
-
-
-# TODO: Rename this class to something more specific.
+# An ActionBuilder is responsible for constructing a dependency graph of
+# Actions. It also can take in configuration parameters from the command line to
+# pass to Actions etc. Here, we take a learning_rate parameter which we'll pass
+# to the training action.
 class ExampleActionBuilder(ActionBuilder):
     """ActionBuilder for {{ project_name }}."""
 
     def __init__(
         self,
+        learning_rate: float,
     ):
         """Create an `ActionBuilder` for {{ project_name }}."""
+        # The project name is for organizational purposes and will be the
+        # project name in Weights and Biases.
         ActionBuilder.__init__(self, project_name="{{python_package_import_name}}")
 
+        self.learning_rate = learning_rate
+
+    # This method is responsible for generating the dependency graph of Actions.
     @override
     def build_actions(self) -> list[Action]:
         actions = []
 
-        parent_action = self.add_action(actions, BogusParentAction(parents=[]))
-        self.add_action(actions, BogusChildAction(parents=[parent_action]))
+        # Build each Action in sequence. Note that we use the helper method
+        # add_action rather than appending to the list directly, since
+        # add_action needs to do some work behind the scenes.
+        store_action = self.add_action(actions, ExampleStoreAction(parents=[]))
+        train_action = self.add_action(
+            actions,
+            ExampleTrainAction(
+                store_dataset=store_action,
+                learning_rate=self.learning_rate,
+            ),
+        )
+        self.add_action(
+            actions,
+            ExampleEvaluationAction(
+                store_dataset=store_action,
+                train_model=train_action,
+            ),
+        )
         return actions
