@@ -70,7 +70,7 @@ lint.cmd = "pre-commit run --all-files"
 #
 go.help = "Main entry point for running this project in Aeromancy"
 go.cmd = """python -maeromancy.runner
-  --extra-docker-run-args='-v ./data:/base/data'
+  --extra-docker-run-args='-v ./ingest:/base/ingest'
 """
 
 debug_shell.help = "Open a shell in the Aeromancy Docker container (don't run any experiments)"

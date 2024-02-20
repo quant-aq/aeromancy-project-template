@@ -5,7 +5,7 @@ from typing_extensions import override
 
 from {{python_package_import_name}}.actions import (
     ExampleEvaluationAction,
-    ExampleStoreAction,
+    ExampleIngestAction,
     ExampleTrainAction,
 )
 
@@ -36,18 +36,18 @@ class ExampleActionBuilder(ActionBuilder):
         # Build each Action in sequence. Note that we use the helper method
         # add_action rather than appending to the list directly, since
         # add_action needs to do some work behind the scenes.
-        store_action = self.add_action(actions, ExampleStoreAction(parents=[]))
+        ingest_action = self.add_action(actions, ExampleIngestAction(parents=[]))
         train_action = self.add_action(
             actions,
             ExampleTrainAction(
-                store_dataset=store_action,
+                ingest_dataset=ingest_action,
                 learning_rate=self.learning_rate,
             ),
         )
         self.add_action(
             actions,
             ExampleEvaluationAction(
-                store_dataset=store_action,
+                ingest_dataset=ingest_action,
                 train_model=train_action,
             ),
         )

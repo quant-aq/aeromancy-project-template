@@ -2,7 +2,7 @@
 
 This provides some example actions for a simple machine learning pipeline:
 
-1. Store: Ingest the dataset as an Aeromancy artifact.
+1. Ingest: Store a dataset as an Aeromancy artifact.
 2. Train: Train a model from the dataset. Output a serialized trained model.
 3. Evaluation: Read the data and the trained model, evaluate the model on the
    dataset. Produce evaluation metrics and output the model predictions.
@@ -24,12 +24,12 @@ from typing_extensions import override
 # pipeline). If you're familiar with Luigi and other pipeline builders, this may
 # be familiar. Actions roughly correspond to a run on Weights and Biases
 # (Aeromancy will help you create the runs on the Weights and Biases side).
-class ExampleStoreAction(Action):
-    """Example Aeromancy `Action` to store an existing dataset."""
+class ExampleIngestAction(Action):
+    """Example Aeromancy `Action` to ingest an existing dataset."""
 
     # These class attributes help you organize your Actions and will be exposed
     # later in experiment trackers like Weights and Biases.
-    # From most general to most specific, here are the three organizational
+    # From most general to most specific, here are the organizational
     # levels Weights and Biases (and thus Aeromancy) provides:
     #
     # 1. project_name (defined by ActionBuilder)
@@ -37,7 +37,7 @@ class ExampleStoreAction(Action):
     # 3. job_type
     # 4. individual Actions -- there can be multiple Actions of the same
     #    job_type
-    job_type = "store-dataset"
+    job_type = "ingest-dataset"
     job_group = "model"
 
     # This method tells Aeromancy what artificts this Action produces. Most
@@ -68,15 +68,15 @@ class ExampleStoreAction(Action):
     #    Aeromancy Artifact.
     @override
     def run(self, tracker: Tracker) -> None:
-        print("Hello world from ExampleStoreAction.")
+        print("Hello world from ExampleIngestAction.")
 
-        # Our dataset already exists on disk in a special directory which is
-        # accessible both inside and outside the Docker container. This should
-        # generally only be used for initial dataset ingestion -- downstream
-        # Actions should not use this path.
+        # Our dataset already exists on disk in a special directory (ingest/)
+        # which is accessible both inside and outside the Docker container. This
+        # should generally only be used for initial dataset ingestion --
+        # downstream Actions should not use this path.
         dataset_paths = [
-            Path("data/example_train_data.txt"),
-            Path("data/example_test_data.txt"),
+            Path("ingest/example_train_data.txt"),
+            Path("ingest/example_test_data.txt"),
         ]
         # We can associate arbitrary metrics with the dataset.
         dataset_metadata = {
@@ -84,11 +84,11 @@ class ExampleStoreAction(Action):
             "num_test_records": dataset_paths[1].read_text().splitlines(),
         }
 
+        # We'll use outputs() from above to keep artifact names in sync.
         [dataset_artifact_name] = self.outputs()
         tracker.declare_output(
             # This is the name of the artifact we're declaring. This name is
             # used in many places:
-            #
             # 1. It needs to match one of the names in list of artifact names
             #    returned by outputs(), so it will be part of the name of any
             #    jobs that run this Action.
@@ -115,10 +115,10 @@ class ExampleStoreAction(Action):
             metadata=dataset_metadata,
             # This is the portion of the local_filenames paths that we don't
             # want to use include in our artifact names on the blob store. In
-            # this case, this means we'll store `data/example_train_data.txt` as
-            # `dataset/bogus-output1.txt` in the `example-bucket` bucket (the
-            # "dataset/" comes from our s3_destination).
-            strip_prefix=dataset_paths[0].parent,
+            # this case, this means we'll store `ingest/example_train_data.txt`
+            # as `dataset/example_train_data.txt` in the `example-bucket` bucket
+            # (the "dataset/" comes from our s3_destination key).
+            strip_prefix="ingest/",
         )
 
 
@@ -126,7 +126,7 @@ class ExampleTrainAction(Action):
     """Example Aeromancy `Action` for model training.
 
     This doesn't really train a model, but it does consume an artifact from
-    ExampleStoreAction ("example-dataset") and generate a new artifact
+    ExampleIngestAction ("example-dataset") and generate a new artifact
     ("example-model").
 
     We include one hyperparameter (`learning_rate`) as a demonstration of how to
@@ -137,22 +137,22 @@ class ExampleTrainAction(Action):
     job_group = "model"
 
     # When making a ExampleTrainAction, we'll also require a reference to a
-    # ExampleStoreAction -- this will let us later use the outputs from an
-    # ExampleStoreAction in our run() method.
+    # ExampleIngestAction -- this will let us later use the outputs from an
+    # ExampleIngestAction in our run() method.
     # This also demonstrates a configuration parameter (e.g., a hyperparameter).
     # It will be specified by the ActionBuilder, which could describe a sweep
     # over values. In this case, we've wired it all the way back to the CLI.
     # Configuration parameters are also exposed to Weights and Biases.
     def __init__(
         self,
-        store_dataset: ExampleStoreAction,
+        ingest_dataset: ExampleIngestAction,
         learning_rate: float,
     ):
         self.learning_rate = learning_rate
 
-        # We need to include store_dataset as a parent Action so Aeromancy will
+        # We need to include ingest_dataset as a parent Action so Aeromancy will
         # know that it needs to run first.
-        Action.__init__(self, parents=[store_dataset], learning_rate=learning_rate)
+        Action.__init__(self, parents=[ingest_dataset], learning_rate=learning_rate)
 
     @override
     def outputs(self) -> list[str]:
@@ -162,15 +162,15 @@ class ExampleTrainAction(Action):
     def run(self, tracker: Tracker) -> None:
         print("Hello world from ExampleTrainAction.")
 
-        # This demonstrates get_io(), a helper function to simultaneously
+        # This demonstrates get_io(), a helper method to simultaneously
         # provide input and output artifact names. Most Actions include a call
-        # to this. Note that inpputs and outputs are each lists which is why
+        # to this. Note that inputs and outputs are each lists which is why
         # we're using brackets to unpack these.
         [dataset_artifact_name], [model_artifact_name] = self.get_io()
         # Once we know the name of our input artifact, we need to declare it as
         # a dependency. This is the counterpart of tracker.declare_output() from
-        # above. It will resolve the artifact to the appropriate version and
-        # return the paths we should use to read the dataset.
+        # ExampleIngestAction. It will resolve the artifact to the appropriate
+        # version and return the paths we should use to read the dataset.
         dataset_paths = tracker.declare_input(dataset_artifact_name)
 
         train_data = dataset_paths[0].read_text()
@@ -228,12 +228,12 @@ class ExampleEvaluationAction(Action):
 
     def __init__(
         self,
-        store_dataset: ExampleStoreAction,
+        ingest_dataset: ExampleIngestAction,
         train_model: ExampleTrainAction,
     ):
         Action.__init__(
             self,
-            parents=[store_dataset, train_model],
+            parents=[ingest_dataset, train_model],
         )
 
     @override
