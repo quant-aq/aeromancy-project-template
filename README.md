@@ -8,24 +8,25 @@
 ![Apache 2.0 licensed](https://img.shields.io/github/license/quant-aq/aeromancy)
 
 This is a [Copier](https://copier.readthedocs.io/en/stable/) template for
-[Aeromancy](https://github.com/quant-aq/aeromancy)-managed projects. If you're
-not familiar with Aeromancy, you'll want to start with its
-[documentation](https://quant-aq.github.io/aeromancy/). This makes it easy to
-get a new Aeromancy project up and running. This template (along with Aeromancy)
-is fairly opinionated makes a lot of decisions for you in terms of workflows.
+getting a new [Aeromancy](https://github.com/quant-aq/aeromancy)-managed project
+up and running quickly. If you're not familiar with Aeromancy, you'll want to
+start with its [documentation](https://quant-aq.github.io/aeromancy/). This
+template (along with Aeromancy) is fairly opinionated makes a lot of decisions
+for you in terms of workflows.
 
-Template originally based on
-[pdm-project/copier-pdm](https://github.com/pdm-project/copier-pdm) with some
-modifications in [dmcc/copier-pdm](https://github.com/dmcc/copier-pdm).
+The template will build stubs for all necessary Aeromancy components. The
+initial setup creates a simple ML pipeline with three steps:
+
+1. Load a dataset
+2. Train a model on the dataset
+3. Evaluate the model on the dataset
 
 ## Requirements
 
 This template requires the following dependencies:
 
-- Python 3
-- Git
-- [Copier](https://copier.readthedocs.io/en/stable/)
-- [PDM](https://pdm.fming.dev)
+- [Python](https://python.org) (3.10+)
+- [Git](https://git-scm.com/)
 
 ## Quick Start
 
@@ -47,14 +48,17 @@ copier copy --trust "gh:quant-aq/aeromancy-project-template" <project_name>
 
 ```bash
 cd <project_name>
-git init
-pdm install --dev
+git init ; pdm install --dev --no-self
 ```
 
 4. Check out [Aeromancy](https://quant-aq.github.io/aeromancy/) docs for more
    information!
 
 ## Template features
+
+The template was originally based on
+[pdm-project/copier-pdm](https://github.com/pdm-project/copier-pdm) with some
+modifications in [dmcc/copier-pdm](https://github.com/dmcc/copier-pdm).
 
 ### Package manager
 

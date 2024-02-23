@@ -1,0 +1,283 @@
+"""Aeromancy `Action`s for {{ project_name }}.
+
+This provides some example actions for a simple machine learning pipeline:
+
+1. Ingest: Store a dataset as an Aeromancy artifact.
+2. Train: Train a model from the dataset. Output a serialized trained model.
+3. Evaluation: Read the data and the trained model, evaluate the model on the
+   dataset. Produce evaluation metrics and output the model predictions.
+
+There's no actual dataset or model here so we can focus on how to structure
+the pipeline within Aeromancy -- see the inline comments for a tour!
+"""
+
+import random
+import tempfile
+from pathlib import Path
+
+from aeromancy import Action, S3Object, Tracker
+from typing_extensions import override
+
+
+# Actions define a specific data transformation you'd like to track with
+# Aeromancy (e.g., training a model or performing a step in a data processing
+# pipeline). If you're familiar with Luigi and other pipeline builders, this may
+# be familiar. Actions roughly correspond to a run on Weights and Biases
+# (Aeromancy will help you create the runs on the Weights and Biases side).
+class ExampleIngestAction(Action):
+    """Example Aeromancy `Action` to ingest an existing dataset."""
+
+    # These class attributes help you organize your Actions and will be exposed
+    # later in experiment trackers like Weights and Biases.
+    # From most general to most specific, here are the organizational
+    # levels Weights and Biases (and thus Aeromancy) provides:
+    #
+    # 1. project_name (defined by ActionBuilder)
+    # 2. job_group
+    # 3. job_type
+    # 4. individual Actions -- there can be multiple Actions of the same
+    #    job_type
+    job_type = "ingest-dataset"
+    job_group = "model"
+
+    # This method tells Aeromancy what artificts this Action produces. Most
+    # Actions only create a single thing (e.g., a training action creates a
+    # model, an evaluation action could output its predictions over the dataset)
+    # but multiple outputs are allowed. Also note that these can be dynamically
+    # generated based on the configuration of the Action.
+    @override
+    def outputs(self) -> list[str]:
+        return ["example-dataset"]
+
+    # This method defines the actual logic that should be tracked (train a
+    # model, transform a dataset, etc.). Within run(), we're responsible for
+    # declaring input and output artifacts with the provided Tracker. Much of
+    # the work in this example centers around configuring an output artifact
+    # with tracker.declare_output(). Why is this so complicated? Declaring an
+    # output artifact has several effects which Aeromancy will bind together:
+    #
+    # 1. It creates a tracked (versioned) artifact from a set of local files.
+    # 2. This makes the artifact usable in downstream Action -- we'll access the
+    #    files through Aeromancy rather than directly from disk, in fact, since
+    #    it will ensure that we're using the correct version of it.
+    # 3. It will store the artifact to an S3-compatible blob store, creating a
+    #    permanent and versioned reference to the contents (well, as permanent
+    #    as the blob store).
+    # 4. It will create a corresponding Weights and Biases artifact which will
+    #    be associated with the corresponding Weights and Biases run and the
+    #    Aeromancy Artifact.
+    @override
+    def run(self, tracker: Tracker) -> None:
+        print("Hello world from ExampleIngestAction.")
+
+        # Our dataset already exists on disk in a special directory (ingest/)
+        # which is accessible both inside and outside the Docker container. This
+        # should generally only be used for initial dataset ingestion --
+        # downstream Actions should not use this path.
+        dataset_paths = [
+            Path("ingest/example_train_data.txt"),
+            Path("ingest/example_test_data.txt"),
+        ]
+        # We can associate arbitrary metrics with the dataset.
+        dataset_metadata = {
+            "num_train_records": dataset_paths[0].read_text().splitlines(),
+            "num_test_records": dataset_paths[1].read_text().splitlines(),
+        }
+
+        # We'll use outputs() from above to keep artifact names in sync.
+        [dataset_artifact_name] = self.outputs()
+        tracker.declare_output(
+            # This is the name of the artifact we're declaring. This name is
+            # used in many places:
+            # 1. It needs to match one of the names in list of artifact names
+            #    returned by outputs(), so it will be part of the name of any
+            #    jobs that run this Action.
+            # 2. Downstream Actions will be able to refer to this Artifact by
+            #    this name.
+            # 3. This is also the name of the corresponding Weights and Biases
+            #    Artifact.
+            name=dataset_artifact_name,
+            # A list of files that should be included in the artifact.
+            local_filenames=dataset_paths,
+            # Where to store the artifact in the blob store -- this includes the
+            # bucket and key (a path prefix). This is purely for organization
+            # purposes -- naming destinations clearly could also aid with
+            # debugging but in general, you won't need to know or use S3 paths.
+            s3_destination=S3Object("example-bucket", "dataset/"),
+            # This is purely for organization purposes and will be exposed in
+            # Weights and Biases. We recommend a human-readable version of the
+            # file type.
+            artifact_type="dataset",
+            # This is an optional property for any extra metadata that you'd
+            # like to associate with the artifact (it will also be exposed in
+            # Weights and Biases). It can also include nested data and store a
+            # wide range of types.
+            metadata=dataset_metadata,
+            # This is the portion of the local_filenames paths that we don't
+            # want to use include in our artifact names on the blob store. In
+            # this case, this means we'll store `ingest/example_train_data.txt`
+            # as `dataset/example_train_data.txt` in the `example-bucket` bucket
+            # (the "dataset/" comes from our s3_destination key).
+            strip_prefix="ingest/",
+        )
+
+
+class ExampleTrainAction(Action):
+    """Example Aeromancy `Action` for model training.
+
+    This doesn't really train a model, but it does consume an artifact from
+    ExampleIngestAction ("example-dataset") and generate a new artifact
+    ("example-model").
+
+    We include one hyperparameter (`learning_rate`) as a demonstration of how to
+    plumb a command-line parameter to a model.
+    """
+
+    job_type = "train-model"
+    job_group = "model"
+
+    # When making a ExampleTrainAction, we'll also require a reference to a
+    # ExampleIngestAction -- this will let us later use the outputs from an
+    # ExampleIngestAction in our run() method.
+    # This also demonstrates a configuration parameter (e.g., a hyperparameter).
+    # It will be specified by the ActionBuilder, which could describe a sweep
+    # over values. In this case, we've wired it all the way back to the CLI.
+    # Configuration parameters are also exposed to Weights and Biases.
+    def __init__(
+        self,
+        ingest_dataset: ExampleIngestAction,
+        learning_rate: float,
+    ):
+        self.learning_rate = learning_rate
+
+        # We need to include ingest_dataset as a parent Action so Aeromancy will
+        # know that it needs to run first.
+        Action.__init__(self, parents=[ingest_dataset], learning_rate=learning_rate)
+
+    @override
+    def outputs(self) -> list[str]:
+        return ["example-model"]
+
+    @override
+    def run(self, tracker: Tracker) -> None:
+        print("Hello world from ExampleTrainAction.")
+
+        # This demonstrates get_io(), a helper method to simultaneously
+        # provide input and output artifact names. Most Actions include a call
+        # to this. Note that inputs and outputs are each lists which is why
+        # we're using brackets to unpack these.
+        [dataset_artifact_name], [model_artifact_name] = self.get_io()
+        # Once we know the name of our input artifact, we need to declare it as
+        # a dependency. This is the counterpart of tracker.declare_output() from
+        # ExampleIngestAction. It will resolve the artifact to the appropriate
+        # version and return the paths we should use to read the dataset.
+        dataset_paths = tracker.declare_input(dataset_artifact_name)
+
+        train_data = dataset_paths[0].read_text()
+        print(f"Training data: {train_data!r}")
+
+        # Now we pretend to train a model.
+        num_iterations = 10
+        # Seeding your RNG is always a good idea for better reproducibility.
+        rng = random.Random(x=7)
+        for step in range(num_iterations):
+            # We can store information about the experiment while it's being
+            # run.
+            tracker.log(
+                {
+                    "step": step,
+                    "train_error": rng.random(),
+                },
+            )
+
+        # When training is done, we serialize our model.
+        temp_dir = tempfile.mkdtemp()
+        model_path = Path(temp_dir) / "model1.txt"
+        model_path.write_text("Not really a model, but just go with it.\n")
+
+        # We can associate arbitrary metrics with the model. Typically we want
+        # to include any relevant configuration parameters and other diagnostic
+        # information.
+        model_overall_metrics = {
+            "learning_rate": self.learning_rate,
+            "train_error": 3.14,
+            "num_iterations": num_iterations,
+        }
+
+        # Save the model as an Aeromancy Artifact.
+        tracker.declare_output(
+            name=model_artifact_name,
+            local_filenames=[model_path],
+            s3_destination=S3Object("example-bucket", "models/"),
+            artifact_type="model",
+            metadata=model_overall_metrics,
+            strip_prefix=model_path.parent,
+        )
+
+
+class ExampleEvaluationAction(Action):
+    """Example Aeromancy `Action` for model evaluation.
+
+    This doesn't really evaluate a model, but it demonstrates an action that
+    reads in the dataset and model produced by other actions, then produces
+    some evaluation metrics.
+    """
+
+    job_type = "eval-model"
+    job_group = "model"
+
+    def __init__(
+        self,
+        ingest_dataset: ExampleIngestAction,
+        train_model: ExampleTrainAction,
+    ):
+        Action.__init__(
+            self,
+            parents=[ingest_dataset, train_model],
+        )
+
+    @override
+    def outputs(self) -> list[str]:
+        return ["example-model-predictions"]
+
+    @override
+    def run(self, tracker: Tracker) -> None:
+        print("Hello world from ExampleEvaluationAction.")
+
+        # Determine input and output artifact names. Note how the order of input
+        # artifacts corresponds to the order we passed their corresponding
+        # Actions for the parents parameter in the constructor.
+        (
+            [dataset_artifact_name, model_artifact_name],
+            [predictions_artifact_name],
+        ) = self.get_io()
+        # In a real evaluation, we'd actually use the dataset and the trained
+        # model...
+        dataset_paths = tracker.declare_input(dataset_artifact_name)
+        [model_path] = tracker.declare_input(model_artifact_name)
+
+        eval_dataset = dataset_paths[1].read_text()
+        print(f"Evaluation data: {eval_dataset!r}")
+
+        # Now we'll pretend to evaluate our model. We'll also produce some
+        # predictions from the model.
+        temp_dir = tempfile.mkdtemp()
+        predictions_path = Path(temp_dir) / "model_predictions.txt"
+        predictions_path.write_text(
+            """prediction 1
+prediction 2
+prediction 3
+""",
+        )
+
+        # Output our evaluation metrics.
+        tracker.log({"score": "pretty good"})
+
+        # Store our model predictions.
+        tracker.declare_output(
+            name=predictions_artifact_name,
+            local_filenames=[predictions_path],
+            s3_destination=S3Object("example-bucket", "predictions/"),
+            artifact_type="predictions",
+            strip_prefix=predictions_path.parent,
+        )

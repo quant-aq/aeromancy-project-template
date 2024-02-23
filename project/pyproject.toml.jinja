@@ -13,9 +13,8 @@ readme = "README.md"
 requires-python = "{{ python_package_requires_python }}"
 dependencies = [
     # keep-sorted start
-    "git+ssh://git@github.com/quant-aq/aeromancy.git",
-    # keep-sorted end
-]
+    "aeromancy @ git+ssh://git@github.com/quant-aq/aeromancy.git",
+] # keep-sorted end
 dynamic = ["version"]
 
 classifiers = [
@@ -70,7 +69,9 @@ lint.cmd = "pre-commit run --all-files"
 # Standard Aeromancy scripts.
 #
 go.help = "Main entry point for running this project in Aeromancy"
-go.cmd = "python -maeromancy.runner"
+go.cmd = """python -maeromancy.runner
+  --extra-docker-run-args='-v ./ingest:/base/ingest'
+"""
 
 debug_shell.help = "Open a shell in the Aeromancy Docker container (don't run any experiments)"
 debug_shell.cmd = "pdm go --debug-shell"
