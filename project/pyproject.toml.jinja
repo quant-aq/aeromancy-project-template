@@ -91,10 +91,7 @@ help.help = "Show the combined help menu (Aeromancy runtime + job selection + pr
 help.cmd = "python src/main.py --help"
 
 aeroset.help = "Use a specific reference/tag/version of Aeromancy"
-aeroset.shell = """pdm remove aeromancy ;
-  pdm add 'git+https://github.com/quant-aq/aeromancy@{args}' &&
-  pdm install
-"""
+aeroset.shell = "pdm add 'git+https://github.com/quant-aq/aeromancy@{args}' && pdm install"
 
 [tool.black]
 line-length = 88
